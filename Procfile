@@ -1,1 +1,1 @@
-web: ruby run.rb -p 25565
+worker: ruby run.rb

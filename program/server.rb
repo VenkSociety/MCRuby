@@ -6,11 +6,12 @@ require 'uri'
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 require 'packet'
 require 'player'
+require "zlib"
 
 class Server
   Config_Template = "name = MCRuby Default Server
-port = 81
-public = true
+port = 25565
+public = True
 maxplayers = 24"
   Properties_Template = "heartbeat_interval = 30"
 
@@ -88,20 +89,67 @@ maxplayers = 24"
     hbsocket.read.split("\r\n\r\n", 2).last
   end
 
+  def stringify(str)
+    if str.nil?
+      str = ''
+    end
+    str = str.ljust(64, ' ')
+  end
+
   def start_handle_connections
     # Start listening
-    @listener = TCPServer.new(@cfg["port"].to_i)
+    @listener = TCPServer.new("127.0.0.1", 25565)
     Thread.fork do
       loop do
         Thread.start(@listener.accept) do |client|
-          n, m = @cfg["name"], @cfg["motd"]
+          n, m = stringify(@cfg["name"]), stringify(@cfg["motd"])
           # It appears that you need to send a server ID packet before the client sends anything over?
-          client.write "\x007#{n}                                                          #{m}                                                          \x64"
+          client.write "\x00\x07#{n}#{m}\x64"
+          puts 'Server identified'
+
+          client.write "\x01"
+          puts 'Pinged client'
+
+          client.write "\x02"
+          puts 'Level initialized'
+
+          #File.open(replay_file) do |file|
+            #first_portion = file.read(20)
+            #file.seek(24, IO::SEEK_END)
+            #second_portion = file.read(20)
+          #end
+
+          # Get data chunks of level?
+          Zlib::GzipReader.open('main.lvl') {|lvl|
+            identifier = lvl.read | (lvl.read << 8)
+
+            width = lvl.read | (lvl.read << 8)
+            length = lvl.read | (lvl.read << 8)
+            height = lvl.read | (lvl.read << 8)
+            spawn_x = lvl.read | (lvl.read << 8)
+            spawn_z = lvl.read | (lvl.read << 8)
+            spawn_y = lvl.read | (lvl.read << 8)
+            spawn_yaw = lvl.read
+            spawn_pitch = lvl.read
+            #read() # pervisit, useless
+            #read() # perbuild, useless
+            blocks = read(width * height * length)
+            print blocks
+          }
+
+          client.write "\x03" # ??
+
+          x = 128
+          y = 128
+          z = 128
+
+          client.write "\x04#{x}#{y}#{z}"
+          puts 'Level finalized'
+
           # Receive the "join packet" from the player (http://www.minecraftwiki.net/wiki/Classic_server_protocol#Client_.E2.86.92_Server_packets)
           d = client.read
           puts d
-          # Don't think this is mandatory
-          client.close
+          # client.close()
         end
       end
     end
@@ -116,7 +164,6 @@ maxplayers = 24"
       puts "Expected URL but got this from #{@last_url}:"
       puts resp
       puts "-- END DEBUG --"
-      exit 1
     end
     start_handle_connections
     puts "Server up! You can connect to this server in an internet browser via `#{resp}'."

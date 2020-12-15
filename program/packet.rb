@@ -6,13 +6,13 @@ module PacketParser
     case id
       # When someone wants to connect
       when 0x00
-        puts "Got to when condition"
+        puts "test"
         # Remove the 2nd character (specifies protocol version)
         data[0] = ""
         # Strings are padded with spaces
         #result = data.split("  ")[0..1]
       else
-        puts "Unknown packet recieved! ID: #{id}"
+        puts "Unknown packet received! ID: #{id}"
         return false
     end
     result = extract_strings(data)
